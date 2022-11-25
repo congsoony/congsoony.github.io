@@ -23,3 +23,8 @@
 파일 -> HASH FUNCTION() -> 결과값(
     파일이 같은지, 혹은 데이터 위변조체크
 )
+
+- html http 등장
+    - protocol :  통신 규칙에 따라 Data를 송수신 하는 약속
+    - FTP(File Transfer Protocol) : 파일 송수신 할수있는 프로토콜
+    
