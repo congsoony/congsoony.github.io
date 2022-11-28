@@ -1,5 +1,5 @@
 # HTTP
-# [내블로그](https://congsoony.github.io/http/index.html/)
+# [내블로그](https://congsoony.github.io/http/index)
 - http요청
     - 웹브라우저가 웹서버에 요청
 
