@@ -1,0 +1,45 @@
+body{
+    background-color: rgb(132, 221, 184);
+}
+#header,#footer,#section{
+    background-color: white;
+    margin: 30px;
+}
+#header ul {
+    list-style:none;
+    float: right;
+    margin: 0;
+}
+#header ul li{
+    display: inline-block;
+    height: 40px;
+    width: 120px;
+    background-color: rgb(140,186,199);
+    text-align: center;
+    line-height: 40px;
+    margin-right: 30px;
+    margin-top: 30px;
+    box-shadow: 2px 2px 10px 2px gray;
+}
+
+#header {
+    height: 100px;
+}
+
+#footer{
+    height: 100px;
+    text-align:center;
+vertical-align:middle;
+
+}
+#footer p{
+    position: relative;
+    left:50%;
+    top:50%;
+    transform: translate(-50%,-50%);
+    
+}
+a{
+    text-decoration-line: none;
+    text-decoration: none;
+}

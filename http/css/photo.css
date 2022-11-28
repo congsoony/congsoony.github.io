@@ -1,0 +1,29 @@
+#section{
+    height: 700px;
+    
+}
+#section section{
+    height: 50%;
+    display: flex;
+}
+#section section img{
+    
+    margin-top: 50px;
+    margin-left: 50px;
+    width: 30%;
+    height: 70%;
+    border: solid 10px gray;
+}
+#section section section{
+    display: block;
+    margin-top: 50px;
+    margin-left: 50px;
+    width: 50%;
+}
+#section section section p{
+    margin:0;
+    line-height: 25px;
+}
+#first{
+    border-bottom: 1px solid gray;
+}
