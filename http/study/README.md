@@ -1,5 +1,5 @@
 # HTTP
-
+# [내블로그](https://congsoony.github.io/http/index.html/)
 - http요청
     - 웹브라우저가 웹서버에 요청
 
@@ -25,3 +25,4 @@
         - url 노출안됨 -> url에 데이터를 폼하해야 하는 경우에 적합하지않음
         - 여러개의 파일첨부가능
         - 용량제한 없다.
+
