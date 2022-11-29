@@ -19,10 +19,32 @@
 - POST 
     - 헤더 
         - 
-    - post 요청ㅇㄴ message-body부분에 데이터를보냄
+    - post 요청 message-body부분에 데이터를보냄
     - 특징
         - Binary 데이터 전송가능
         - url 노출안됨 -> url에 데이터를 폼하해야 하는 경우에 적합하지않음
         - 여러개의 파일첨부가능
         - 용량제한 없다.
 
+
+# CSS 사용법
+- 테두리(border)
+
+    - padding : 10px 20px 30px 40px  순서 시계방향
+
+- Image 종류 
+    - Raster 폰트 -> 픽셀단위로 글자를 만든다.
+    - pixel 출력속도가 빠름
+    - 폰트크기에 따라 각문자를 만듦
+    - 정해진 크기보다 더크게 출력하나만 단순히 각 픽셀의 크기를 느리기 때문에 계단현상 발생
+    - 이미지의 복잡도와 상관없이 픽셀크기만 같다
+    
+
+
+# javascript
+- docuemnt :  도구를 다루는 기능이있음
+    - getElementById(태그아이디)
+ ->태그객체가 리턴
+    - getElementByTagName(태그이름) -> 태그목록이 리턴
+    - createElement(태그이름) -> 태그객체를 생성해서 리턴
+    - setAttribute(속성명,속성값) : 태그의 속성 값을 설정
