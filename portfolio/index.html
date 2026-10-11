@@ -1373,9 +1373,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.-->
           <tr><td>EC2 2대 + Redis</td><td>2,326명</td><td>232개</td><td>6,319 msg/s</td></tr>
         </tbody></table>
         <p class="test-condition"><strong>조건과 해석</strong><br>EC2 t3.medium, ALB, 10명/방의 메시징 시나리오를 사용한 접속 증가 테스트입니다. 화상 영상 부하는 포함하지 않았으며, 결과는 보고서에 기록된 한계 구간의 비교값입니다. 지속 운영 성능이나 무손실·무지연을 보장하는 수치로 해석하지 않았습니다.</p>
-        <h3 class="subheading"><svg class="icon" aria-hidden="true"><use href="#icon-workflow"></use></svg>Fan-out 트래픽 격리와 클라우드 비용 최적화 (FinOps)</h3>
-        <p style="font-size:13px">단일 대형 강의실에 모든 참여자를 수용할 경우 이벤트 브로드캐스트가 참여자 수의 제곱(N²)으로 급증하며 서버 CPU 급등과 AWS NAT Gateway 대역폭 과금 위험을 확인했습니다. 실무 운영 기준에 맞춰 <strong>10명 단위 다중 강의실 분리 구조</strong>로 트래픽 전송 범위를 격리하고 서브넷 라우팅을 재설계하여, 동일 참여자 수용 기준 불필요한 브로드캐스트 데이터 전송량과 클라우드 네트워크 비용 리스크를 <strong>약 98% 감축</strong>시켰습니다.</p>
-        <p class="test-condition">수치 출처: StudyFlow 다중 강의실 부하 테스트 결과보고서 및 AWS 아키텍처 재설계 산출물 기준입니다.</p>
+        <h3 class="subheading"><svg class="icon" aria-hidden="true"><use href="#icon-workflow"></use></svg>Fan-out 메시지 격리와 복제 배수 98% 감축</h3>
+        <p style="font-size:13px">단일 대형 강의실에 모든 참여자를 수용할 경우 이벤트 브로드캐스트가 참여자 수의 제곱(N²) 수준으로 급증하며 서버 CPU 급등과 과도한 트래픽 부하를 확인했습니다. 과외 및 소규모 스터디라는 서비스 목적에 맞춰 <strong>10명 단위 다중 강의실 분리 구조</strong>로 테스트 모델을 재구성했습니다. 한 메시지의 전달 대상이 500명에서 10명으로 줄어듦에 따라, 전달 대상 수를 기준으로 계산한 <strong>메시지 복제 배수를 98% 감소</strong>시키고 실제 운영 환경에 부합하는 안정적인 부하 조건을 확보했습니다.</p>
+        <p class="test-condition">수치 출처: StudyFlow 다중 강의실 부하 테스트 결과보고서 기준 (500명 단일 방 대비 10명 단위 방 모델의 메시지 전달 대상 수 계산값).</p>
         <div class="page-footer"><span>STUDYFLOW / REALTIME CASE STUDY</span><span>03 / 07</span></div>
       </section>
 
