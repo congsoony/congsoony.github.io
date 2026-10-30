@@ -6,10 +6,12 @@
 - 제목·목차·기술 도식·표·코드 블록의 간격과 시각적 위계 개선.
 - 스크롤 진입 애니메이션, 비교 그래프 전환, 링크·버튼의 가벼운 반응.
 - 시스템의 모션 감소 설정과 인쇄에서는 애니메이션을 끄고 전체 내용을 표시.
-- 이미지·아이콘·글꼴·CSS·JavaScript를 `index.html`에 포함. 파일 직접 열기와 정적 호스팅 지원.
+- 기존 이미지·아이콘·글꼴·CSS·JavaScript는 `index.html`에 포함하고, StudyFlow 시연 GIF 7개는 `assets/studyflow-demo/`에 분리했습니다. HTML 직접 열기와 정적 호스팅을 지원합니다.
 
 편집 스타일은 `design.css`, 애니메이션은 `motion.js`입니다. 현재 실행 HTML은 이 파일들을 외부 요청하지 않고 포함한 상태입니다.
 
 Pretendard v1.3.9 글꼴: SIL Open Font License 1.1. 라이선스는 HTML 주석과 `FONT-LICENSE.txt`에 포함되어 있습니다. Lucide 아이콘: ISC.
+
+시연 GIF는 1440px 폭, 10fps로 웹 페이지에 맞게 최적화했습니다. 원본 GIF는 별도 폴더에 보관되어 있습니다.
 
 아직 GitHub에 게시하지 않았습니다.
