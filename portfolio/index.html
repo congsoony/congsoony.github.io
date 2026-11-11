@@ -1488,9 +1488,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.-->
       </section>
 
       <section class="sheet" id="realtime" aria-labelledby="realtime-heading">
-        <div class="section-heading"><p class="section-kicker">04 / DISTRIBUTED MESSAGING</p><h2 id="realtime-heading">서버를 늘리자, 메시지가 끊겼습니다.</h2><p>Scale-out 이후 인스턴스마다 분리된 STOMP 세션을 Redis Pub/Sub으로 연결했습니다.</p></div>
+        <div class="section-heading"><p class="section-kicker">04 / DISTRIBUTED MESSAGING</p><h2 id="realtime-heading">서버를 늘리기 전에, 메시지가 끊길 구조부터 막았습니다.</h2><p>Scale-out 전에 인스턴스마다 분리될 STOMP 세션을 Redis Pub/Sub으로 미리 연결했습니다.</p></div>
         <dl class="case-rows">
-          <div class="case-row"><dt>문제</dt><dd>서로 다른 EC2에 접속한 사용자는 같은 강의실에 있어도 상대의 채팅·화이트보드 이벤트를 받지 못했습니다. 한 서버의 로컬 메시지 브로커가 다른 서버의 세션까지 전달하지 못하는 구조였습니다.</dd></div>
+          <div class="case-row"><dt>문제</dt><dd>서버를 2대로 늘리면 서로 다른 EC2에 접속한 사용자는 같은 강의실에 있어도 상대의 채팅·화이트보드 이벤트를 받지 못하는 구조임을 배포 전에 확인했습니다. 한 서버의 로컬 메시지 브로커는 다른 서버의 세션까지 전달하지 못하기 때문입니다.</dd></div>
           <div class="case-row"><dt>구현</dt><dd>이벤트의 목적지와 내용을 공통 채널 <strong>ws:broadcast</strong>에 발행하고, 각 인스턴스가 이를 구독해 자신의 STOMP 클라이언트로 전달하도록 변경했습니다. 구독한 이벤트는 다시 발행하지 않아 중계 루프를 피했습니다.</dd></div>
           <div class="case-row"><dt>검증</dt><dd>k6로 10명 단위 강의실을 만들고 채팅과 화이트보드 이벤트를 전송했습니다. EC2 1대와 2대 + Redis 구성에서 접속 수, 메시지 처리량, 연결 실패가 발생하는 구간을 비교했습니다.</dd></div>
         </dl>
