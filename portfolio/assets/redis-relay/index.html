@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<script>
+  // ?embed=1 이면 포트폴리오 삽입 모드: 라이트 테마 고정, 제목·설명 숨김
+  try { if (new URLSearchParams(location.search).get('embed') === '1') {
+    document.documentElement.classList.add('embed'); document.documentElement.setAttribute('data-theme', 'light'); } } catch (e) {}
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redis 브로드캐스트 흐름</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7fb; --panel: #ffffff; --line: #d6dbe6; --text: #172033; --muted: #5b667c;
+    --wire: #c3cad8; --a: #2563eb; --b: #059669; --redis: #dc2626; --alb: #7c3aed;
+    --pkt: #f59e0b; --ok: #059669; --bad: #dc2626; --code-bg: #0f172a; --code-text: #e2e8f0; --on-accent: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1120; --panel: #111a2e; --line: #24324d; --text: #e6ecf7; --muted: #94a3b8;
+      --wire: #33435f; --a: #60a5fa; --b: #34d399; --redis: #f87171; --alb: #a78bfa;
+      --pkt: #fbbf24; --ok: #34d399; --bad: #f87171; --code-bg: #060b16; --code-text: #cbd5e1; --on-accent: #0b1120;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1120; --panel: #111a2e; --line: #24324d; --text: #e6ecf7; --muted: #94a3b8;
+    --wire: #33435f; --a: #60a5fa; --b: #34d399; --redis: #f87171; --alb: #a78bfa;
+    --pkt: #fbbf24; --ok: #34d399; --bad: #f87171; --code-bg: #060b16; --code-text: #cbd5e1; --on-accent: #0b1120;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', system-ui, sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 48px; }
+  .kicker { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); letter-spacing: .08em; }
+  h1 { margin: 6px 0 8px; font-size: clamp(22px, 4vw, 32px); font-weight: 800; }
+  .lead { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+  button:hover { border-color: var(--a); }
+  button.primary { background: var(--a); color: var(--on-accent); border-color: var(--a); }
+  .switch { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button.on { background: var(--redis); color: var(--on-accent); }
+  .switch button.off.on { background: var(--muted); }
+  .speed { margin-left: auto; display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } .speed { margin-left: 0; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+  svg { width: 100%; height: auto; display: block; }
+  .node rect { fill: var(--panel); stroke-width: 2; }
+  .node text { fill: var(--text); font-size: 15px; font-weight: 700; text-anchor: middle; }
+  .node text.sub { fill: var(--muted); font-size: 12px; font-weight: 400; }
+  .node text.mono { font-family: 'JetBrains Mono', monospace; }
+  .node.glow rect { filter: drop-shadow(0 0 10px var(--pkt)); }
+  .wire { fill: none; stroke: var(--wire); stroke-width: 3; }
+  .wire.ws { stroke-dasharray: 2 6; stroke-linecap: round; }
+  .wire.active { stroke: var(--pkt); stroke-width: 4; }
+  .wire.dim { opacity: .25; }
+  .inner { fill: none; stroke: none; }
+  .svg-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .scroll-hint { display: none; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  @media (max-width: 660px) { .scroll-hint { display: block; } .svg-scroll svg { min-width: 620px; } }
+  .pk-label { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; paint-order: stroke;
+    stroke: var(--panel); stroke-width: 4px; }
+  .tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; fill: var(--muted); }
+  .badge { font-size: 13px; font-weight: 800; }
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+  .steps li { counter-increment: s; padding: 9px 10px 9px 38px; position: relative; border-radius: 10px; font-size: 13.5px;
+    line-height: 1.5; color: var(--muted); }
+  .steps li::before { content: counter(s); position: absolute; left: 10px; top: 9px; width: 20px; height: 20px; border-radius: 50%;
+    border: 1px solid var(--line); font-size: 11px; display: grid; place-items: center; }
+  .steps li.cur { background: color-mix(in srgb, var(--pkt) 16%, transparent); color: var(--text); }
+  .steps li.cur::before { background: var(--pkt); color: #111; border-color: var(--pkt); }
+  .steps li.done { color: var(--text); }
+  .steps code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .log { margin-top: 16px; background: var(--code-bg); color: var(--code-text); border-radius: 14px; padding: 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; min-height: 150px; line-height: 1.7; overflow-x: auto; }
+  .log .t { color: #64748b; } .log .a { color: #60a5fa; } .log .b { color: #34d399; } .log .r { color: #f87171; } .log .x { color: #fbbf24; }
+  .note { margin-top: 16px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .note b { color: var(--text); }
+  @media (prefers-reduced-motion: reduce) { .node.glow rect { filter: none; } }
+  /* 포트폴리오 iframe 삽입 모드 (?embed=1) */
+  html.embed body { background: transparent; }
+  html.embed .wrap { max-width: none; padding: 0; }
+  html.embed .kicker, html.embed h1, html.embed .lead, html.embed .note { display: none; }
+  html.embed .log { min-height: 0; height: 250px; overflow-y: auto; }   /* 반복 재생 중 높이가 출렁이지 않게 고정 */
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">STUDYFLOW · DISTRIBUTED STOMP · REDIS PUB/SUB RELAY</div>
+  <h1>선생님이 보낸 메시지가 다른 서버에 붙은 학생에게 도착하기까지</h1>
+  <p class="lead">같은 강의실이어도 서로 다른 서버에 붙을 수 있습니다. Redis가 두 서버를 잇습니다.</p>
+
+  <div class="controls">
+    <div class="switch" role="group" aria-label="Redis 중계">
+      <button id="btnOn" class="on">Redis 중계 ON</button>
+      <button id="btnOff" class="off">중계 없음</button>
+    </div>
+    <button id="btnAsg" title="ALB가 어느 서버에 연결을 붙일지 바꿔 봅니다">ALB 배정: 선생님→A · 학생→B</button>
+    <button id="btnPlay" class="primary">▶ 재생</button>
+    <button id="btnStep">한 단계</button>
+    <button id="btnReset">처음으로</button>
+    <div class="speed">속도
+      <button data-speed="0.5">0.5x</button><button data-speed="1">1x</button><button data-speed="2">2x</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <p class="scroll-hint">← 그림을 옆으로 밀어서 볼 수 있습니다 →</p>
+      <div class="svg-scroll">
+      <svg viewBox="0 0 900 560" role="img" aria-label="선생님과 학생이 ALB를 거쳐 각각 EC2-A, EC2-B에 연결되고 두 서버가 Redis로 메시지를 중계하는 구조">
+        <!-- wires -->
+        <path id="s1" class="wire ws" d="M120,122 C120,185 220,205 340,205"/>
+        <path id="s2" class="wire ws" d="M395,235 C395,280 250,265 220,302"/>
+        <path id="s3" class="wire ws" d="M780,122 C780,185 680,205 560,205"/>
+        <path id="s4" class="wire ws" d="M505,235 C505,280 650,265 680,302"/>
+        <path id="pub" class="wire" d="M170,382 C170,455 250,478 340,478"/>
+        <path id="subA" class="wire" d="M360,452 C320,425 280,410 270,382"/>
+        <path id="pubB" class="wire" d="M730,382 C730,455 650,478 560,478"/>
+        <path id="subB" class="wire" d="M540,452 C580,425 620,410 630,382"/>
+        <!-- ALB 내부 경로(보이지 않음): 들어온 쪽 → 배정된 서버 쪽 -->
+        <path id="iLA" class="inner" d="M340,205 L395,235"/>
+        <path id="iLB" class="inner" d="M340,205 C420,215 470,220 505,235"/>
+        <path id="iRA" class="inner" d="M560,205 C480,215 430,220 395,235"/>
+        <path id="iRB" class="inner" d="M560,205 L505,235"/>
+
+        <text class="tag" x="150" y="270">ALB → EC2-A</text>
+        <text class="tag" x="680" y="270">ALB → EC2-B</text>
+        <text class="tag" x="108" y="452">PUBLISH</text>
+        <text class="tag" x="236" y="430">SUBSCRIBE</text>
+        <text class="tag" x="740" y="452">PUBLISH</text>
+        <text class="tag" x="598" y="430">SUBSCRIBE</text>
+
+        <!-- nodes -->
+        <g class="node" id="nChul"><rect x="40" y="50" width="160" height="72" rx="14" style="stroke:var(--a)"/>
+          <text x="120" y="82">🧑‍🏫 선생님</text><text class="sub" id="lblT" x="120" y="104">연결 전</text></g>
+        <g class="node" id="nYoung"><rect x="700" y="50" width="160" height="72" rx="14" style="stroke:var(--b)"/>
+          <text x="780" y="82">🧑‍🎓 학생</text><text class="sub" id="lblS" x="780" y="104">연결 전</text></g>
+        <g class="node" id="nAlb"><rect x="340" y="175" width="220" height="60" rx="14" style="stroke:var(--alb)"/>
+          <text x="450" y="201">Caddy(HTTPS) → ALB</text><text class="sub" x="450" y="221">연결 시점에 서버 배정</text></g>
+        <g class="node" id="nA"><rect x="100" y="302" width="240" height="80" rx="14" style="stroke:var(--a)"/>
+          <text x="220" y="333">EC2-A · Spring Boot</text><text class="sub" id="lblA" x="220" y="356">STOMP 브로커: 접속자 없음</text></g>
+        <g class="node" id="nB"><rect x="560" y="302" width="240" height="80" rx="14" style="stroke:var(--b)"/>
+          <text x="680" y="333">EC2-B · Spring Boot</text><text class="sub" id="lblB" x="680" y="356">STOMP 브로커: 접속자 없음</text></g>
+        <g class="node" id="nRedis"><rect x="340" y="448" width="220" height="70" rx="14" style="stroke:var(--redis)"/>
+          <text x="450" y="478">⚡ ElastiCache Redis</text><text class="sub mono" x="450" y="500">channel: ws:broadcast</text></g>
+
+        <!-- result badges -->
+        <text id="rChul" class="badge" x="120" y="146" text-anchor="middle"></text>
+        <text id="rYoung" class="badge" x="780" y="146" text-anchor="middle"></text>
+        <g id="packets"></g>
+      </svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <ol class="steps" id="steps"></ol>
+    </div>
+  </div>
+
+  <div class="log" id="log" aria-live="polite"></div>
+
+  <p class="note"><b>코드</b> · <code>RealtimeBroadcaster.send()</code> → Redis <code>ws:broadcast</code> → 각 서버 <code>deliverLocal()</code> (재발행 없음).
+    “중계 없음”은 비교용 가정입니다.</p>
+</div>
+
+<script>
+(() => {
+  // ALB 배정 시나리오: [선생님 서버, 학생 서버]
+  const ASSIGNS = [['A', 'B'], ['B', 'A'], ['A', 'A']];
+  const NAME = { t: '선생님', s: '학생' };
+  const up = (p) => p === 't' ? 's1' : 's3';            // 사람 ↔ ALB
+  const down = (srv) => srv === 'A' ? 's2' : 's4';       // ALB ↔ 서버
+  const pubSeg = (srv) => srv === 'A' ? ['pub', 1] : ['pubB', 1];
+  const inner = (p, srv) => (p === 't' ? 'iL' : 'iR') + srv;   // ALB 안에서 배정된 서버 쪽으로
+  const subSeg = (srv) => srv === 'A' ? ['subA', 1] : ['subB', 1];
+  const cls = (srv) => srv === 'A' ? 'a' : 'b';
+  const tagSrv = (srv) => `<span class="${cls(srv)}">[EC2-${srv}]</span>`;
+
+  function build(mode, T, S) {
+    const users = (srv) => ['t', 's'].filter(p => (p === 't' ? T : S) === srv);
+    const servers = [...new Set([T, S])];
+    const same = T === S;
+    const PK = {
+      conn: { label: 'CONNECT', color: 'var(--alb)', hollow: true },
+      send: { label: 'SEND', color: 'var(--pkt)' },
+      pub: { label: 'PUBLISH', color: 'var(--redis)' },
+      msg: { label: 'MESSAGE', color: 'var(--pkt)' },
+      rcv: { label: 'onMessage', color: 'var(--redis)' },
+      boot: { label: 'SUBSCRIBE', color: 'var(--redis)', hollow: true }
+    };
+    const boot = {
+      chains: [[['subA', -1]], [['subB', -1]]], pk: PK.boot, node: 'nRedis',
+      text: '서버가 켜질 때 EC2-A·B가 Redis 채널을 <b>미리 구독</b>합니다.',
+      log: `${tagSrv('A')} SUBSCRIBE ws:broadcast   ${tagSrv('B')} SUBSCRIBE ws:broadcast   <span class="t">(앱 기동 시)</span>`
+    };
+    const connT = {
+      chains: [[[up('t'), 1], [inner('t', T), 1], [down(T), 1]]], pk: PK.conn, node: 'n' + T, connect: 't',
+      text: `선생님 입장 → ALB가 <b>EC2-${T}</b>에 연결합니다. 구독은 EC2-${T} 메모리에만 등록됩니다.`,
+      log: `<span class="x">[ALB]</span> 선생님 CONNECT → EC2-${T}   ${tagSrv(T)} JWT 검증 → 로컬 브로커에 SUBSCRIBE 등록`
+    };
+    const connS = {
+      chains: [[[up('s'), 1], [inner('s', S), 1], [down(S), 1]]], pk: PK.conn, node: 'n' + S, connect: 's',
+      text: `학생 입장 → ALB가 <b>EC2-${S}</b>에 연결합니다.` + (S === T ? ' (같은 서버)' : ' 두 서버는 서로의 접속자를 모릅니다.'),
+      log: `<span class="x">[ALB]</span> 학생 CONNECT → EC2-${S}   ${tagSrv(S)} JWT 검증 → 로컬 브로커에 SUBSCRIBE 등록`
+    };
+    const connect = mode === 'on' ? [boot, connT, connS] : [connT, connS];
+    const send = { chains: [[[up('t'), 1]]], pk: PK.send, node: 'nAlb',
+      text: '선생님이 판서합니다(<code>SEND</code>).',
+      log: '<span class="x">[client:선생님]</span> STOMP SEND → /pub/classroom-sessions/{id}/whiteboard' };
+    const recv = { chains: [[[inner('t', T), 1], [down(T), 1]]], pk: PK.send, node: 'n' + T, text: '', log: '' };
+
+    if (mode === 'on') {
+      recv.text = `<b>EC2-${T}</b>가 받아 권한 확인 후 순번(<code>seq</code>)을 붙입니다.`;
+      recv.log = `${tagSrv(T)} @MessageMapping whiteboard → canDraw ✓ → seq 부여 → RealtimeBroadcaster.send()`;
+      return [...connect, send, recv,
+        { chains: [[pubSeg(T)]], pk: PK.pub, node: 'nRedis',
+          text: `EC2-${T}가 Redis에 <b>발행</b>합니다.`,
+          log: '<span class="r">[redis]</span> PUBLISH ws:broadcast Envelope{type, destination, user, payload}' },
+        { chains: [[subSeg('A')], [subSeg('B')]], pk: PK.rcv, node: null,
+          text: `Redis가 <b>모든 서버</b>에 전달합니다(EC2-${T} 포함).`,
+          log: `${tagSrv('A')} onMessage ← ws:broadcast   ${tagSrv('B')} onMessage ← ws:broadcast` },
+        { chains: servers.map(srv => [[down(srv), -1]]), pk: PK.msg, node: null,
+          text: '각 서버가 자기 접속자에게만 넘깁니다(<code>deliverLocal</code>).',
+          log: ['A', 'B'].map(srv => `${tagSrv(srv)} deliverLocal → ${users(srv).map(p => NAME[p] + ' 세션').join(', ') || '구독자 없음'}`).join('   ') },
+        { chains: [[[inner('t', T), -1], [up('t'), -1]], [[inner('s', S), -1], [up('s'), -1]]], pk: PK.msg, node: null,
+          text: '두 화면에 같은 판서가 반영됩니다.',
+          log: '<span class="x">[result]</span> 선생님 ✓  학생 ✓', result: { t: true, s: true } }
+      ];
+    }
+    recv.text = `<b>EC2-${T}</b>가 받습니다.`;
+    recv.log = `${tagSrv(T)} convertAndSend → 로컬 SimpleBroker`;
+    const local = users(T);
+    return [...connect, send, recv,
+      { chains: [[[down(T), -1]]], pk: PK.msg, node: 'n' + T,
+        text: `중계가 없으니 EC2-${T} 접속자에게만 보냅니다.`,
+        log: `${tagSrv(T)} 구독자 = ${local.map(p => NAME[p] + ' 세션').join(', ')}` },
+      { chains: local.map(p => [[inner(p, T), -1], [up(p), -1]]), pk: PK.msg, node: null,
+        text: same
+          ? '같은 서버라 우연히 받았습니다. <b>보장되지 않습니다.</b>'
+          : `학생은 <b>받지 못합니다.</b>`,
+        log: same ? '<span class="x">[result]</span> 선생님 ✓  학생 ✓ (우연히 같은 서버)'
+          : `${tagSrv(S)} (수신 없음)   <span class="x">[result]</span> 선생님 ✓  학생 ✗`,
+        result: { t: true, s: same } }
+    ];
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const svgNS = 'http://www.w3.org/2000/svg';
+  let mode = 'on', idx = 0, playing = false, busy = false, speed = 1, asg = 0, gen = 0, playToken = 0;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SCEN = { get on() { return build('on', ...ASSIGNS[asg]); }, get off() { return build('off', ...ASSIGNS[asg]); } };
+  let list = [];
+
+  let joined = new Set();
+  function setLabels() {
+    const [T, S] = ASSIGNS[asg];
+    $('lblT').textContent = joined.has('t') ? `EC2-${T}에 연결` : '연결 전';
+    $('lblS').textContent = joined.has('s') ? `EC2-${S}에 연결` : '연결 전';
+    ['A', 'B'].forEach(srv => {
+      const who = [joined.has('t') && T === srv && '선생님', joined.has('s') && S === srv && '학생'].filter(Boolean).join('·');
+      $('lbl' + srv).textContent = 'STOMP 브로커: ' + (who ? who + ' 세션' : '접속자 없음');
+    });
+  }
+
+  function renderSteps() {
+    $('steps').innerHTML = list.map((s, i) =>
+      `<li class="${i < idx - 1 ? 'done' : ''} ${i === idx - 1 ? 'cur' : ''}">${s.text}</li>`).join('');
+  }
+  function clearVisuals() {
+    document.querySelectorAll('.wire').forEach(w => w.classList.remove('active', 'dim'));
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('glow'));
+    $('packets').innerHTML = '';
+    $('rChul').textContent = ''; $('rYoung').textContent = '';
+    if (mode === 'off') ['pub', 'subA', 'pubB', 'subB'].forEach(id => $(id).classList.add('dim'));
+    $('nRedis').style.opacity = mode === 'off' ? .3 : 1;
+  }
+  function reset() {
+    gen++; busy = false; playing = false; idx = 0; $('btnPlay').textContent = '▶ 재생';
+    list = SCEN[mode]; joined = new Set(); setLabels();
+    clearVisuals(); renderSteps();
+    $('log').innerHTML = `<span class="t">// mode: ${mode === 'on' ? 'Redis relay ON' : 'relay 없음 (가정)'} · ▶ 재생 또는 한 단계를 누르세요</span>`;
+  }
+  function animateSeg(id, dir, pk) {
+    return new Promise(res => {
+      const path = $(id), len = path.getTotalLength();
+      path.classList.add('active');
+      const g = document.createElementNS(svgNS, 'g');
+      const dot = document.createElementNS(svgNS, 'circle');
+      dot.setAttribute('r', 9);
+      dot.setAttribute('fill', pk.hollow ? 'var(--panel)' : pk.color);
+      dot.setAttribute('stroke', pk.hollow ? pk.color : '#fff');
+      dot.setAttribute('stroke-width', pk.hollow ? 4 : 2);
+      const lbl = document.createElementNS(svgNS, 'text');
+      lbl.textContent = pk.label;
+      lbl.setAttribute('class', 'pk-label');
+      lbl.setAttribute('fill', pk.color);
+      g.appendChild(dot); g.appendChild(lbl);
+      $('packets').appendChild(g);
+      const dur = (reduce ? 1 : 900) / speed;
+      const t0 = performance.now();
+      (function frame() {
+        const t = Math.min(1, (performance.now() - t0) / dur);
+        const e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        const p = path.getPointAtLength(len * (dir > 0 ? e : 1 - e));
+        dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
+        lbl.setAttribute('x', p.x + 13); lbl.setAttribute('y', p.y - 11);
+        if (t < 1) setTimeout(frame, 16);
+        else { g.remove(); path.classList.remove('active'); res(); }
+      })();
+    });
+  }
+  async function step() {
+    if (busy) return;
+    if (idx >= list.length) { reset(); return; }
+    busy = true;
+    const myGen = gen;
+    const s = list[idx]; idx++; renderSteps();
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('glow'));
+    await Promise.all(s.chains.map(async chain => { for (const [id, d] of chain) await animateSeg(id, d, s.pk); }));
+    if (myGen !== gen) return;   // 도중에 처음으로/모드 변경 → 이전 단계 결과 버림
+    if (s.connect) { joined.add(s.connect); setLabels(); }
+    if (s.node) $(s.node).classList.add('glow');
+    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    $('log').innerHTML += `<br><span class="t">${ts}</span> ${s.log}`;
+    $('log').scrollTop = $('log').scrollHeight;
+    if (s.result) {
+      $('rChul').textContent = s.result.t ? '✓ 수신' : '✗ 미수신';
+      $('rChul').style.fill = s.result.t ? 'var(--ok)' : 'var(--bad)';
+      $('rYoung').textContent = s.result.s ? '✓ 수신' : '✗ 미수신';
+      $('rYoung').style.fill = s.result.s ? 'var(--ok)' : 'var(--bad)';
+      if (s.result.s) $('nYoung').classList.add('glow');
+    }
+    busy = false;
+    if (idx >= list.length && !playing) $('btnPlay').textContent = '↻ 다시 재생';
+  }
+  async function play() {
+    if (idx >= list.length) reset();
+    playing = !playing;
+    $('btnPlay').textContent = playing ? '❚❚ 일시정지' : '▶ 재생';
+    if (!playing) return;
+    const my = ++playToken;
+    let myGen = gen;
+    const alive = () => playing && my === playToken && myGen === gen;
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    for (;;) {                                   // 끝나면 잠시 멈췄다가 처음부터 다시 (반복 재생)
+      while (alive() && idx < list.length) {
+        while (busy && alive()) await wait(30);
+        if (!alive()) break;
+        await step();
+        if (alive()) await wait(450 / speed);
+      }
+      if (!alive()) return;
+      await wait(2500 / speed);                   // 결과 화면을 잠깐 보여 줌
+      if (!alive()) return;
+      reset(); playing = true; myGen = gen;
+      $('btnPlay').textContent = '❚❚ 일시정지';
+      await wait(400 / speed);
+    }
+  }
+  // 재생 중이었다면 처음으로/모드/배정 변경 후에도 계속 재생
+  function restart() { const was = playing; reset(); if (was) play(); }
+  function setMode(m) {
+    mode = m;
+    $('btnOn').classList.toggle('on', m === 'on');
+    $('btnOff').classList.toggle('on', m === 'off');
+    restart();
+  }
+  $('btnOn').onclick = () => setMode('on');
+  $('btnOff').onclick = () => setMode('off');
+  $('btnAsg').onclick = () => {
+    asg = (asg + 1) % ASSIGNS.length;
+    const [T, S] = ASSIGNS[asg];
+    $('btnAsg').textContent = `ALB 배정: 선생님→${T} · 학생→${S}`;
+    restart();
+  };
+  $('btnPlay').onclick = play;
+  $('btnStep').onclick = () => { playing = false; $('btnPlay').textContent = '▶ 재생'; step(); };
+  $('btnReset').onclick = restart;
+  document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
+    speed = +b.dataset.speed;
+    document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('primary', x === b));
+  });
+  document.querySelector('[data-speed="1"]').classList.add('primary');
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has('asg')) { asg = (+q.get('asg')) % ASSIGNS.length; const [T, S] = ASSIGNS[asg]; $('btnAsg').textContent = `ALB 배정: 선생님→${T} · 학생→${S}`; }
+    if (q.get('mode') === 'off') { mode = 'off'; $('btnOn').classList.remove('on'); $('btnOff').classList.add('on'); }
+  } catch (e) {}
+  // 삽입 모드: 부모 페이지에 실제 높이를 알려 iframe 높이를 맞춤
+  if (document.documentElement.classList.contains('embed') && window.parent !== window) {
+    const post = () => parent.postMessage({ type: 'redis-relay-height', height: Math.ceil(document.querySelector('.wrap').getBoundingClientRect().height) + 4 }, '*');
+    new ResizeObserver(post).observe(document.querySelector('.wrap')); window.addEventListener('load', post); post();
+  }
+  reset();
+  setTimeout(play, 600);
+})();
+</script>
+</body>
+</html>

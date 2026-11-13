@@ -1221,6 +1221,19 @@ OTHER DEALINGS IN THE FONT SOFTWARE.-->
     .terminal-card .code-block { color: #000000 !important; }
   }
 </style>
+<style id="redis-relay-demo">
+  .relay-demo { margin: 28px 0 8px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  .relay-demo-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 14px; }
+  .relay-demo-head strong { font-size: 14px; color: var(--ink); }
+  .relay-demo-head span { font-size: 12.5px; color: #5f6b67; flex: 1 1 280px; }
+  .relay-demo iframe { display: block; width: 100%; height: 980px; border: 0; }
+  .relay-demo-print { display: none; }
+  @media (max-width: 640px) { .relay-demo { padding: 12px; margin-left: -4px; margin-right: -4px; } }
+  @media print {
+    .relay-demo iframe, .relay-demo-head .source-link { display: none; }
+    .relay-demo-print { display: block; font-size: 9pt; color: #5f6b67; margin: 0; }
+  }
+</style>
 <style id="studyflow-demo-gallery">
   .demo-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
   .demo-count { flex: 0 0 auto; padding: 7px 11px; border: 1px solid #cfe2d9; border-radius: 999px; background: #f1f8f4; color: var(--accent); font: 11px/1.4 var(--mono); }
@@ -1496,6 +1509,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.-->
         </dl>
         <div class="decision"><strong>설계 판단</strong>기존 STOMP 구조를 유지하면서 인스턴스 간 이벤트 전달을 연결했습니다. Redis Pub/Sub은 메시지를 영구 저장하거나 재생하지 않으므로, 재접속 시 상태 복구는 별도 설계가 필요한 영역입니다.</div>
         <div class="case-sources"><a class="source-link" href="https://github.com/prgrms-aibe-devcourse/AIBE5_FinalProject_1010_BE/commit/82888ea792378b2ce20d25385538cf7617e93c1d" target="_blank" rel="noopener noreferrer">Redis 중계 구현 커밋 <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg></a></div>
+        <figure class="relay-demo">
+          <figcaption class="relay-demo-head">
+            <strong>동작 흐름 애니메이션</strong>
+            <span>백엔드 코드 기준 · ALB 배정과 Redis 중계 ON/OFF를 바꿔 볼 수 있습니다 · “중계 없음”은 비교용 가정</span>
+            <a class="source-link" href="assets/redis-relay/index.html" target="_blank" rel="noopener noreferrer">새 탭에서 크게 보기 <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg></a>
+          </figcaption>
+          <iframe id="relay-demo-frame" src="assets/redis-relay/index.html?embed=1" title="선생님이 보낸 화이트보드 이벤트가 ALB, EC2 두 대, Redis ws:broadcast 채널을 거쳐 다른 서버의 학생에게 전달되는 과정 애니메이션" loading="lazy"></iframe>
+          <p class="relay-demo-print">인쇄본에서는 애니메이션이 보이지 않습니다. 웹 포트폴리오의 이 섹션 또는 assets/redis-relay/에서 확인할 수 있습니다.</p>
+        </figure>
         <div class="comparison">
           <div class="comparison-title"><strong>다중 강의실 테스트 · 접속 수 비교</strong><span>결과보고서 기록값 / 가상 사용자</span></div>
           <div class="bar-row"><span>EC2 1대</span><div class="bar-track"><div class="bar-fill" style="width:59.42%" data-fill="59.42%"></div></div><span class="bar-value bar-counter" data-target="1382">1,382</span></div>
@@ -1886,4 +1908,15 @@ Optional&lt;CreditAccount&gt; <span class="hl-fn">findWithLockByUserId</span>(<s
     }
   });
 })();
+</script>
+<script id="redis-relay-demo-resize">
+  (() => {
+    const frame = document.getElementById('relay-demo-frame');
+    if (!frame) return;
+    window.addEventListener('message', (e) => {
+      if (e.source !== frame.contentWindow || !e.data || e.data.type !== 'redis-relay-height') return;
+      const h = Math.ceil(Number(e.data.height));
+      if (h > 200 && h < 4000) frame.style.height = h + 'px';
+    });
+  })();
 </script></body></html>
